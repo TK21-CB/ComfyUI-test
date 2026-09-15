@@ -1,14 +1,21 @@
 #!/bin/bash
 # Provisioning script para instancia vast.ai com ComfyUI.
-# Colado direto na caixa "On-start Script" do vast.ai, na frente do
-# "entrypoint.sh" que ja estava la: baixa os modelos primeiro e so depois
-# chama o entrypoint original, que sobe o ComfyUI normalmente.
 #
-# Troque CIVITAI_TOKEN abaixo pela sua API key da Civitai
+# Uso: hospede este arquivo num repo publico do GitHub e aponte a variavel
+# de ambiente PROVISIONING_SCRIPT (na config da instancia vast.ai) para a
+# URL raw dele, por exemplo:
+#   https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/provisioning_comfyui.sh
+# O provisionador oficial do vast.ai (o mesmo que aparece nos logs como
+# "Provisioning instance with manifest from /provisioning.yaml") busca essa
+# URL e roda o script sozinho, com retry, sem precisar mexer no
+# entrypoint.sh nem no On-start Script.
+#
+# Defina TAMBEM a variavel de ambiente CIVITAI_TOKEN (separada, NUNCA dentro
+# deste arquivo) com sua API key da Civitai
 # (https://civitai.com/user/account -> API Keys). E necessaria porque alguns
 # dos arquivos abaixo sao marcados NSFW e a Civitai exige autenticacao para
-# baixa-los. Mantenha este repositorio PRIVADO, ja que a chave fica em texto
-# puro aqui.
+# baixa-los. Como este arquivo fica em repo PUBLICO, jamais cole a chave
+# aqui dentro.
 #
 # Checkpoints baixados (models/checkpoints):
 #   - Red Lily | Illu                    (modelVersionId 2343145)
@@ -26,8 +33,7 @@
 
 set -uo pipefail
 # (sem "-e" de proposito: se um download falhar, o script deve seguir para
-# os proximos arquivos e ainda assim chamar o entrypoint.sh no final, para
-# nao deixar o ComfyUI sem subir por causa de um modelo so)
+# os proximos arquivos em vez de abortar tudo)
 
 COMFYUI_DIR="${COMFYUI_DIR:-${WORKSPACE:-/workspace}/ComfyUI}"
 CHECKPOINTS_DIR="${COMFYUI_DIR}/models/checkpoints"
@@ -89,16 +95,20 @@ function provisioning_download_civitai() {
         printf "  aviso: CIVITAI_TOKEN nao definido; o download pode falhar (401/403) para modelos com restricao.\n"
     fi
 
+    # Usa curl, nao wget: a Civitai redireciona alguns arquivos para storage
+    # com auth via assinatura na propria URL (Cloudflare R2/AWS SigV4). O
+    # wget reenvia nosso header Authorization mesmo apos o redirect, o que
+    # colide com a assinatura da URL e derruba o download com 400 Bad
+    # Request. O curl, por padrao, descarta o header Authorization ao
+    # redirecionar para um host diferente, entao nao tem esse conflito.
     local attempt
     for attempt in 1 2 3 4 5; do
         printf "[download] %s -> %s (tentativa %d/5)\n" "$filename" "$dest" "$attempt"
-        if wget \
-            --content-disposition \
+        if curl -L --fail \
             "${auth_header[@]}" \
-            --timeout=30 \
-            --tries=3 \
-            --progress=dot:giga \
-            -O "$dest" \
+            --connect-timeout 30 \
+            --retry 3 --retry-delay 5 \
+            -o "$dest" \
             "$url"; then
             return 0
         fi
@@ -130,4 +140,3 @@ function provisioning_start() {
 }
 
 provisioning_start
-
