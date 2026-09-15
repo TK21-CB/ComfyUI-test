@@ -30,6 +30,12 @@
 #   - Ri-mix - Style LORA [Illu+Anima]   (modelVersionId 2811751)
 #   - sexy details v5                    (modelVersionId 3002225)
 #   - USNR STYLE                         (modelVersionId 1552087)
+#
+# Embeddings baixados (models/embeddings):
+#   - easynegative                       (modelVersionId 9208)
+#   - lazypos                            (modelVersionId 1833157)
+#   - lazyneg                            (modelVersionId 2121199)
+#   - lazyhand                           (modelVersionId 2268235)
 
 set -uo pipefail
 # (sem "-e" de proposito: se um download falhar, o script deve seguir para
@@ -38,6 +44,7 @@ set -uo pipefail
 COMFYUI_DIR="${COMFYUI_DIR:-${WORKSPACE:-/workspace}/ComfyUI}"
 CHECKPOINTS_DIR="${COMFYUI_DIR}/models/checkpoints"
 LORAS_DIR="${COMFYUI_DIR}/models/loras"
+EMBEDDINGS_DIR="${COMFYUI_DIR}/models/embeddings"
 
 CHECKPOINT_MODELS=(
     "2343145|redLilyIllu_v10.safetensors"
@@ -53,6 +60,13 @@ LORA_MODELS=(
     "2811751|rimixxO2.safetensors"
     "3002225|sexy_details_v5.safetensors"
     "1552087|USNR_STYLE_ILL_V1_lokr3-000024.safetensors"
+)
+
+EMBEDDING_MODELS=(
+    "9208|easynegative.safetensors"
+    "1833157|lazypos.safetensors"
+    "2121199|lazyneg.safetensors"
+    "2268235|lazyhand.safetensors"
 )
 
 function provisioning_print_header() {
@@ -107,6 +121,7 @@ function provisioning_download_civitai() {
         if curl -L --fail \
             "${auth_header[@]}" \
             --connect-timeout 30 \
+            --speed-time 30 --speed-limit 10240 \
             --retry 3 --retry-delay 5 \
             -o "$dest" \
             "$url"; then
@@ -136,6 +151,7 @@ function provisioning_start() {
     provisioning_wait_for_network
     provisioning_get_files "$CHECKPOINTS_DIR" "${CHECKPOINT_MODELS[@]}"
     provisioning_get_files "$LORAS_DIR" "${LORA_MODELS[@]}"
+    provisioning_get_files "$EMBEDDINGS_DIR" "${EMBEDDING_MODELS[@]}"
     printf "\nProvisioning concluido.\n"
 }
 
